@@ -1,136 +1,204 @@
-module.exports = function() {
+module.exports = function () {
 
-  var Leap = require('leapjs');
-  var spheron = require('spheron');
+    var Leap = require('leapjs');
+    var spheron = require('spheron');
 
-  // Set this to the device Sphero connects as on your computer.
-  var device = '/dev/tty.Sphero-RBR-AMP-SPP';
+    // Set this to the device Sphero connects as on your computer.
+    var device = '/dev/cu.Sphero-RYR-AMP-SPP';
 
-  var safeMode = true; //Turn this off if Sphero is in water or you like to live dangerously!
+    var safeMode = true; //Turn this off if Sphero is in water or you like to live dangerously!
 
-  var controlSphero = function(sphero) {
-  	var controller = new Leap.Controller({frameEventName:'deviceFrame', enableGestures:true});
-      controller.on('connect', function() {
-      	console.log('connected to leap motion');
-      });
-      controller.on('ready', function() {
-          console.log('ready');
-      });
-      controller.on('focus', function() {
-          console.log('focus?');
-      });
-      controller.on('deviceStreaming', function() {
-          console.log('device connected');
-      });
-      controller.on('deviceStopped', function() {
-          console.log('device disconnected');
-      });
-      controller.on('frame', function(frame) {
-          if (frame.gestures.length) {
-            var g = frame.gestures[0];
+    var controlSphero = function (sphero) {
+        var minSpeed = 60;
+        var maxSpeed = 200;
+        var minAngle = 0.2;
+        var minGraphDistance = 50;
 
-            if (g.type == 'swipe' && g.state ==='stop') {
-              handleSwipe(g);
+        sphero.currentState = {
+            speed: 0,
+            dir: 0,
+            flag: 0
+        };
+
+        sphero.proposedState = {
+            speed: 0,
+            dir: 0,
+            flag: 0
+        };
+
+        var controller = new Leap.Controller({
+            frameEventName: 'deviceFrame',
+            enableGestures: true
+        });
+
+        controller.on('connect', function () {
+            console.log('connected to leap motion');
+        });
+        controller.on('ready', function () {
+            console.log('ready');
+        });
+        controller.on('focus', function () {
+            console.log('focus');
+        });
+        controller.on('deviceStreaming', function () {
+            console.log('device connected');
+        });
+        controller.on('deviceStopped', function () {
+            console.log('device disconnected');
+        });
+        //var count = 0;
+        controller.on('frame', function (frame) {
+            if (frame.pointables.length > 3) {
+                move(frame);
+            } else if (sphero.currentState.speed > 0) {
+                stopSphero(sphero);
             }
-          }
-      });
 
-      var handleSwipe = function(g) {
-          // Checks the difference between the start position and the end position of the fingers on each axis.
-          var X = g.position[0] - g.startPosition[0];
-          var Y = g.position[1] - g.startPosition[1];
-          var Z = g.position[2] - g.startPosition[2];
+            //if (frame.gestures.length) {
+            //    var g = frame.gestures[0];
+            //
+            //    if (g.type == 'swipe' && g.state === 'stop') {
+            //        handleSwipe(g);
+            //    } else if (frame.pointables.length > 3){
+            //
+            //    } else if (frame.pointables.length === 0) {
+            //        sphero.stop();
+            //    }
+            //}
+        });
 
-          // Gets the absolute values.
-          var aX = Math.abs(X);
-          var aY = Math.abs(Y);
-          var aZ = Math.abs(Z);
+        var move = function (frame) {
+            if (frame.hands.length && frame.hands[0]) {
+                var hand = frame.hands[0];
 
-          // Gets the maximum value to check in which direction the user moved its fingers.
-          var big = Math.max(aX, aY, aZ);
-          // direction gets returned in the console. default value is '?'. Not necessary.
-          var direction = '?';
+                var direction = calculateAngle(hand);
+                var speed = calculateSpeed(hand);
+                send(speed, direction, 1);
 
-          // If the maximum value returned is the X one, execute the cases called "LEFT" or "RIGHT".
-          if (aX === big) {
-            direction = 'RIGHT';
-            if (X < 0) {
-              direction = 'LEFT';
+                //var roll = hand.roll(); // 0 < left & 0 > right
+                //var pitch = hand.pitch(); // 0 < forward & 0 > back
+                //
+                //if (pitch > minAngle) {
+                //    //console.log('backwards');
+                //    send(getSpeed(pitch), 180, 1);
+                //} else if (pitch < (0 - minAngle)) {
+                //    //console.log('straight');
+                //    send(getSpeed(pitch), 0, 1);
+                //} else if (roll > minAngle) {
+                //    //console.log('left');
+                //    send(getSpeed(roll), 270, 1);
+                //} else if (roll < (0 - minAngle)) {
+                //    //console.log('right');
+                //    send(getSpeed(roll), 90, 1);
+                //} else {
+                //    stopSphero();
+                //}
+            } else {
+                stopSphero();
             }
-          // If the maximum value returned is the Y one, execute the cases called "UP" or "DOWN".
-          } else if (aY === big) {
-            direction = 'UP';
-            if (Y < 0) {
-              direction = 'DOWN';
+
+        };
+
+        var calculateAngle = function (hand) {
+            var posX = (hand.palmPosition[0] * 3),
+                posY = (hand.palmPosition[2] * 3) * -1;
+
+            var angle = Math.atan2(posX, posY) * 57.2957795;
+            angle = angle < 0 ? angle + 360 : angle;
+            return Math.floor(angle);
+        };
+
+        var calculateSpeed = function (hand){
+            var posX = (hand.palmPosition[0] * 3),
+                posY = (hand.palmPosition[2] * 3) * -1,
+                posZ = (hand.palmPosition[1] * 3) - 200;
+            var calculatedSpeed = 0;
+            var maxLeapCount = 400;
+            var distance = distanceFromZero(posX, posY);
+            if (posZ < 0 || distance < minGraphDistance) {
+                return 0;
+            } else {
+                calculatedSpeed = (distance / maxLeapCount) * maxSpeed;
+                if (calculatedSpeed < minSpeed) {
+                    calculatedSpeed = minSpeed;
+                } else if (calculatedSpeed > maxSpeed) {
+                    calculatedSpeed = maxSpeed;
+                }
             }
-          // If the maximum value returned is the Z one, execute the cases "FORWARD" or "REVERSE".
-          } else if (aZ === big) {
-            direction = 'REVERSE';
-            if (Z < 0) {
-              direction = 'FORWARD';
+            return Math.floor(calculatedSpeed);
+        };
+
+        var distanceFromZero = function(x, y)
+        {
+            var xs = x;
+            xs = xs * xs;
+
+            var ys = y;
+            ys = ys * ys;
+
+            return Math.sqrt( xs + ys );
+        };
+
+        var count = 0;
+        var send = function (speed, dir, flag) {
+            if (isStateChanged(speed, dir, flag)) {
+                console.log(count++ + ': speed: ' + speed + '\ndirection: ' + dir);
+                sphero.roll(speed, dir, flag);
+                if (speed/maxSpeed < .1) {
+                    ball.setRGB(spheron.toolbelt.COLORS.YELLOW).setBackLED(255);
+                } else if (speed == minSpeed) {
+                    ball.setRGB(spheron.toolbelt.COLORS.GREEN).setBackLED(255);
+                } else {
+                    ball.setRGB(spheron.toolbelt.COLORS.BLUE).setBackLED(255);
+                }
+                sphero.currentState = {
+                    speed: speed,
+                    dir: dir,
+                    flag: flag
+                };
             }
-          }
+        };
 
-          switch (direction) {
-            // Original settings included: 'sphero.heading = (heading value)';
-            // Original speed for all of them: 128.
-            case 'LEFT':
-              //sphero.roll(speed, heading, state, option)
-              sphero.roll(70, 270, 1); //Heading is expressed in degrees so 270 will make the ball move to the left.
-              break;
-            case 'RIGHT':
-              sphero.heading = 90;
-              sphero.roll(70, 90, 1);
-              break;
-            case 'UP':
-              stopSphero(sphero);
-              //Make the ball turn blue when users move their hand up.
-              ball.setRGB(spheron.toolbelt.COLORS.BLUE).setBackLED(255);
-              break;
-            case 'DOWN':
-              stopSphero(sphero);
-              //Make the ball turn white when users move their hand down.
-               ball.setRGB(spheron.toolbelt.COLORS.WHITE).setBackLED(255);
-              break;
-            case 'FORWARD':
-               sphero.roll(70, 0, 1);
-              break;
-            case 'REVERSE':
-              sphero.heading = 180;
-              sphero.roll(70, 180, 1);
-              break;
+        var isStateChanged = function (speed, dir, flag) {
+            if (Math.abs(sphero.currentState.speed - speed) < 10) {
+                if (Math.abs(sphero.currentState.dir - dir) < 10) {
+                    if (sphero.currentState.flag == flag) {
+                        return false;
+                    }
+                }
+            }
 
-              /*--------------
-                If you want to add a delay between each action, add this in each case,
-                just before the break to add a 2s delay.
+            return true;
+        }
 
-                if (safeMode) {
-                 setTimeout(function() {
-                   stopSphero(sphero);
-                 }, 2000);
-              }
-              ---------------*/
-          }
-      	console.log('Direction: %s', direction);
-      }
+        var setHeading = function (g) {
+            if (g.state === 'stop') {
+                if (g.normal[2] < 0) {
+                    send(0, 45, 0);
+                } else {
+                    send(0, 315, 0);
+                }
+                sphero.write(spheron.commands.api.setHeading(0));
+            }
+        };
+
+        var stopSphero = function (sphero) {
+            ball.setRGB(spheron.toolbelt.COLORS.RED).setBackLED(255);
+            send(0, 0, 0);
+        };
 
         controller.connect();
         console.log('waiting for Leap Motion connection...');
-      };
+    };
 
-  // Stops the Sphero from rolling.
-  var stopSphero = function(sphero) {
-      sphero.roll(0,sphero.heading||0,0);
-  };
+    var ball = spheron.sphero().resetTimeout(true);
+    ball.open(device);
 
-  var ball = spheron.sphero().resetTimeout(true);
-      ball.open(device);
-
-  console.log("waiting for Sphero connection...");
-  ball.on('open', function() {
-  	console.log('connected to Sphero');
-      ball.setRGB(spheron.toolbelt.COLORS.PURPLE).setBackLED(255);
-      controlSphero(ball);
-  });
+    console.log("waiting for Sphero connection...");
+    ball.on('open', function () {
+        console.log('connected to Sphero');
+        ball.setRGB(spheron.toolbelt.COLORS.ORANGE).setBackLED(255);
+        controlSphero(ball);
+    });
 
 };

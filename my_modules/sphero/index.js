@@ -8,7 +8,7 @@ module.exports = function () {
 
     var controlSphero = function (sphero) {
         var minSpeed = 60;
-        var maxSpeed = 256;
+        var maxSpeed = 255;
         var minGraphDistance = 30;
 
         sphero.currentState = {

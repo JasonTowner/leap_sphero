@@ -3,24 +3,15 @@ module.exports = function () {
     var Leap = require('leapjs');
     var spheron = require('spheron');
 
-    // Set this to the device Sphero connects as on your computer.
+    // Set this to the device Sphero connects as on your computer. found by typing ls /dev/cu.* on your mac after you've paired your sphero.
     var device = '/dev/cu.Sphero-RYR-AMP-SPP';
-
-    var safeMode = true; //Turn this off if Sphero is in water or you like to live dangerously!
 
     var controlSphero = function (sphero) {
         var minSpeed = 60;
-        var maxSpeed = 255;
-        var minAngle = 0.2;
+        var maxSpeed = 256;
         var minGraphDistance = 30;
 
         sphero.currentState = {
-            speed: 0,
-            dir: 0,
-            flag: 0
-        };
-
-        sphero.proposedState = {
             speed: 0,
             dir: 0,
             flag: 0
@@ -46,7 +37,7 @@ module.exports = function () {
         controller.on('deviceStopped', function () {
             console.log('device disconnected');
         });
-        //var count = 0;
+
         controller.on('frame', function (frame) {
             if (frame.hands.length && getExtendedFingers(frame.hands[0]).length >= 3) {
                 move(frame);
@@ -63,34 +54,14 @@ module.exports = function () {
                 }
             }
             return extendedFingers;
-        }
+        };
 
         var move = function (frame) {
             if (frame.hands.length && frame.hands[0]) {
                 var hand = frame.hands[0];
-
                 var direction = calculateAngle(hand);
                 var speed = calculateSpeed(hand);
                 send(speed, direction, 1);
-
-                //var roll = hand.roll(); // 0 < left & 0 > right
-                //var pitch = hand.pitch(); // 0 < forward & 0 > back
-                //
-                //if (pitch > minAngle) {
-                //    //console.log('backwards');
-                //    send(getSpeed(pitch), 180, 1);
-                //} else if (pitch < (0 - minAngle)) {
-                //    //console.log('straight');
-                //    send(getSpeed(pitch), 0, 1);
-                //} else if (roll > minAngle) {
-                //    //console.log('left');
-                //    send(getSpeed(roll), 270, 1);
-                //} else if (roll < (0 - minAngle)) {
-                //    //console.log('right');
-                //    send(getSpeed(roll), 90, 1);
-                //} else {
-                //    stopSphero();
-                //}
             } else {
                 stopSphero();
             }
@@ -139,7 +110,7 @@ module.exports = function () {
         var count = 0;
         var send = function (speed, dir, flag) {
             if (isStateChanged(speed, dir, flag)) {
-                console.log(count++ + ': speed: ' + speed + '\ndirection: ' + dir);
+                //console.log(count++ + ': speed: ' + speed + '\ndirection: ' + dir);
                 sphero.roll(speed, dir, flag);
                 if (speed / maxSpeed < .1) {
                     ball.setRGB(spheron.toolbelt.COLORS.YELLOW).setBackLED(255);
@@ -166,8 +137,9 @@ module.exports = function () {
             }
 
             return true;
-        }
+        };
 
+        // Not currently used, but can be used with gestures to change the heading of the sphero
         var setHeading = function (g) {
             if (g.state === 'stop') {
                 if (g.normal[2] < 0) {
@@ -195,6 +167,7 @@ module.exports = function () {
     ball.on('open', function () {
 
         process.on('SIGINT', function(){
+            console.log('ending program...');
             ball.setBackLED(0);
             process.exit(0);
         });

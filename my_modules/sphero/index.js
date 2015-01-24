@@ -10,9 +10,9 @@ module.exports = function () {
 
     var controlSphero = function (sphero) {
         var minSpeed = 60;
-        var maxSpeed = 200;
+        var maxSpeed = 255;
         var minAngle = 0.2;
-        var minGraphDistance = 50;
+        var minGraphDistance = 30;
 
         sphero.currentState = {
             speed: 0,
@@ -48,24 +48,22 @@ module.exports = function () {
         });
         //var count = 0;
         controller.on('frame', function (frame) {
-            if (frame.pointables.length > 3) {
+            if (frame.hands.length && getExtendedFingers(frame.hands[0]).length >= 3) {
                 move(frame);
             } else if (sphero.currentState.speed > 0) {
                 stopSphero(sphero);
             }
-
-            //if (frame.gestures.length) {
-            //    var g = frame.gestures[0];
-            //
-            //    if (g.type == 'swipe' && g.state === 'stop') {
-            //        handleSwipe(g);
-            //    } else if (frame.pointables.length > 3){
-            //
-            //    } else if (frame.pointables.length === 0) {
-            //        sphero.stop();
-            //    }
-            //}
         });
+
+        var getExtendedFingers = function (hand) {
+            var extendedFingers = [];
+            if (hand.fingers !== undefined) {
+                for (var f = 0, finger; finger = hand.fingers[f++];) {
+                    if (finger.extended) extendedFingers.push(finger);
+                }
+            }
+            return extendedFingers;
+        }
 
         var move = function (frame) {
             if (frame.hands.length && frame.hands[0]) {
@@ -108,12 +106,12 @@ module.exports = function () {
             return Math.floor(angle);
         };
 
-        var calculateSpeed = function (hand){
+        var calculateSpeed = function (hand) {
             var posX = (hand.palmPosition[0] * 3),
                 posY = (hand.palmPosition[2] * 3) * -1,
                 posZ = (hand.palmPosition[1] * 3) - 200;
             var calculatedSpeed = 0;
-            var maxLeapCount = 400;
+            var maxLeapCount = 350;
             var distance = distanceFromZero(posX, posY);
             if (posZ < 0 || distance < minGraphDistance) {
                 return 0;
@@ -128,15 +126,14 @@ module.exports = function () {
             return Math.floor(calculatedSpeed);
         };
 
-        var distanceFromZero = function(x, y)
-        {
+        var distanceFromZero = function (x, y) {
             var xs = x;
             xs = xs * xs;
 
             var ys = y;
             ys = ys * ys;
 
-            return Math.sqrt( xs + ys );
+            return Math.sqrt(xs + ys);
         };
 
         var count = 0;
@@ -144,7 +141,7 @@ module.exports = function () {
             if (isStateChanged(speed, dir, flag)) {
                 console.log(count++ + ': speed: ' + speed + '\ndirection: ' + dir);
                 sphero.roll(speed, dir, flag);
-                if (speed/maxSpeed < .1) {
+                if (speed / maxSpeed < .1) {
                     ball.setRGB(spheron.toolbelt.COLORS.YELLOW).setBackLED(255);
                 } else if (speed == minSpeed) {
                     ball.setRGB(spheron.toolbelt.COLORS.GREEN).setBackLED(255);
@@ -196,9 +193,15 @@ module.exports = function () {
 
     console.log("waiting for Sphero connection...");
     ball.on('open', function () {
+
+        process.on('SIGINT', function(){
+            ball.setBackLED(0);
+            process.exit(0);
+        });
         console.log('connected to Sphero');
         ball.setRGB(spheron.toolbelt.COLORS.ORANGE).setBackLED(255);
         controlSphero(ball);
+
     });
 
 };

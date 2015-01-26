@@ -6,7 +6,7 @@ var express = require('express'),
 var app = express();
 
 //require the custom module
-var test = require('./my_modules/sphero');
+var test = require('./lib/sphero');
 test();
 
 // Everything in public will be accessible from '/'
